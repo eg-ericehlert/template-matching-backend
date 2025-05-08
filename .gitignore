@@ -1,0 +1,19 @@
+# Ignore Python virtual environments
+venv/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+
+# IDE/editor config
+.vscode/
+*.swp
+
+# Environment variables file
+.env
