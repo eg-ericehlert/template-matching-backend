@@ -8,7 +8,7 @@ CORS(app)   # <-- this opens all origins; you can lock it down if you like
 
 @app.route('/hello')
 def hello():
-    return "hello"
+    return "hello guvvvnaaaa"
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
