@@ -1,5 +1,5 @@
 # templatematch.py
-
+import boto3
 import os
 import numpy as np
 import cv2 as cv
@@ -22,6 +22,18 @@ BRIGHT_COLORS = [
     [255, 255, 0],    # Bright Yellow
     [0, 0, 255]       # Bright Blue
 ]
+
+def download_image_from_s3(bucket_name, object_key, local_path):
+    """
+    Download an image from S3 bucket to a local path.
+    """
+    
+    s3 = boto3.client('s3')
+    try:
+        s3.download_file(bucket_name, object_key, local_path)
+        logging.info(f"Downloaded {object_key} from bucket {bucket_name} to {local_path}")
+    except Exception as e:
+        logging.error(f"Failed to download {object_key} from bucket {bucket_name}: {e}")
 
 def apply_threshold(image, threshold_value=127):
     _, binary_image = cv.threshold(image, threshold_value, 255, cv.THRESH_BINARY)

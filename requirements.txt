@@ -2,4 +2,5 @@ flask
 flask-cors
 numpy
 matplotlib
-opencv-python
+opencv-python-headless
+boto3

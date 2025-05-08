@@ -1,5 +1,4 @@
 # app.py
-
 import os
 import logging
 from flask import Flask, request, jsonify, send_file, abort
@@ -18,7 +17,6 @@ def hello():
 
 @app.route('/match_template', methods=['POST'])
 def match_template():
-    # Make sure we imported `request` above
     data = request.get_json(force=True)
     input_dir = data.get('dir')
     base_file = data.get('base_filename')
