@@ -1,8 +1,12 @@
+# templatematch.py
+
 import os
 import numpy as np
 import cv2 as cv
 import csv
 import logging
+import matplotlib
+matplotlib.use('Agg')  # Non-GUI backend
 import matplotlib.pyplot as plt
 
 # Set up logging
@@ -35,7 +39,7 @@ def rotate_image_270(image):
 def flip_image(image):
     return cv.flip(image, 1)
 
-def process_template_matching(img_gray_thresh, template_thresh, matching_threshold, template_name):
+def process_template_matching(img_gray_thresh, template_thresh, matching_threshold, template_name=None):
     """
     Run template matching with multiple transformations and return raw boxes and scores.
     """
@@ -111,9 +115,9 @@ def run_job(input_dir, base_filename, nms_thresh=0.5):
     Process the input image and templates, save annotated results, and return a summary dict.
     """
     # Paths
-    main_path = os.path.join(input_dir, base_filename)
-    threshold_csv = os.path.join(input_dir, 'thresholds.csv')
-    template_folder = os.path.join(input_dir, 'templates')
+    main_path      = os.path.join(input_dir, base_filename)
+    threshold_csv  = os.path.join(input_dir, 'thresholds.csv')
+    template_folder= os.path.join(input_dir, 'templates')
 
     # Load main image
     img_rgb = cv.imread(main_path)
@@ -149,16 +153,13 @@ def run_job(input_dir, base_filename, nms_thresh=0.5):
         thresh_val = thresholds.get(tpl_file, 0.90)
         logging.info(f"Matching template {tpl_file} at threshold {thresh_val}.")
 
-        boxes, scores = process_template_matching(img_gray_thresh, tpl_thresh, thresh_val, tpl_file)
+        boxes, scores = process_template_matching(img_gray_thresh, tpl_thresh, thresh_val)
         all_boxes.extend(boxes)
         all_scores.extend(scores)
         all_names.extend([tpl_file] * len(boxes))
 
     # Apply NMS
-    if all_boxes:
-        keep_idxs = non_max_suppression(all_boxes, all_scores, nms_thresh)
-    else:
-        keep_idxs = []
+    keep_idxs = non_max_suppression(all_boxes, all_scores, nms_thresh) if all_boxes else []
 
     counts = {}
     for idx in keep_idxs:
@@ -168,23 +169,24 @@ def run_job(input_dir, base_filename, nms_thresh=0.5):
         cv.rectangle(img_rgb, (x1, y1), (x2, y2), color, 3)
         counts[name] = counts.get(name, 0) + 1
 
-    # Save outputs
+    # Save annotated image
     results_img = os.path.join(input_dir, 'results.png')
     cv.imwrite(results_img, img_rgb)
     logging.info(f"Saved annotated image: {results_img}")
 
-    # Plot counts
+    # Plot counts without GUI
     counts_img = os.path.join(input_dir, 'annotation_counts.png')
     plt.figure(figsize=(10, 6))
-    bar_colors = [tuple(c/255.0) for c in template_colors.values()]
+    bar_colors = [tuple([v/255.0 for v in c]) for c in template_colors.values()]
     bars = plt.bar(counts.keys(), counts.values(), color=bar_colors)
     plt.xticks(rotation=45, ha='right')
     plt.tight_layout()
     for bar in bars:
         plt.annotate(f"{int(bar.get_height())}",
-                     xy=(bar.get_x() + bar.get_width()/2, bar.get_height()),
+                     xy=(bar.get_x() + bar.get_width() / 2, bar.get_height()),
                      xytext=(0, 3), textcoords="offset points", ha='center')
     plt.savefig(counts_img)
+    plt.close()
     logging.info(f"Saved annotation counts graph: {counts_img}")
 
     return {
