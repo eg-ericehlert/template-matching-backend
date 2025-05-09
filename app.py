@@ -4,7 +4,9 @@ import logging
 from flask import Flask, request, jsonify, send_file, abort
 from flask_cors import CORS
 import templatematch
-from download_image_from_s3 import download_entire_prefix_from_s3 as download_images
+from s3_utils import download_entire_prefix_from_s3 as download_images
+from s3_utils import upload_image_to_s3 as upload_image
+import shutil
 
 s3_bucket_name = "eg-template-matching"
 
@@ -38,7 +40,29 @@ def match_template():
 
     try:
         result = templatematch.run_job(full_dir, base_file)
+        results_image = os.path.join(input_dir, 'results.png')
+        counts_image = os.path.join(input_dir, 'annotation_counts.png')
+        upload_image(bucket_name=s3_bucket_name, local_path=results_image, 
+                            object_key=os.path.join(input_dir, 'results.png'), 
+                            s3_key=os.getenv('AWS_ACCESS_KEY_ID'), 
+                            s3_secret=os.getenv('AWS_SECRET_ACCESS_KEY'))
+        upload_image(bucket_name=s3_bucket_name, local_path=counts_image,
+                            object_key=os.path.join(input_dir, 'annotation_counts.png'), 
+                            s3_key=os.getenv('AWS_ACCESS_KEY_ID'), 
+                            s3_secret=os.getenv('AWS_SECRET_ACCESS_KEY'))
+        # Clean up local files
+        os.remove(results_image)
+        os.remove(counts_image)
+
+        try:
+            shutil.rmtree(full_dir)
+            app.logger.info(f"Removed directory: {full_dir}")
+        except Exception as e:
+            app.logger.error(f"Failed to remove directory {full_dir}: {e}")
+
+        # Return the result
         return jsonify(result)
+    
     except FileNotFoundError as fnf:
         return jsonify({"error": str(fnf)}), 404
     except Exception:

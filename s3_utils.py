@@ -85,6 +85,17 @@ def download_entire_prefix_from_s3(bucket_name, prefix, local_base, s3_key=None,
             s3.download_file(bucket_name, key, local_path)
             logging.info(f"Downloaded {key} to {local_path}")
 
+def upload_image_to_s3(bucket_name, local_path, object_key, s3_key=None, s3_secret=None):
+    """
+    Upload an image to S3 bucket from a local path.
+    """
+    s3 = boto3.client('s3', aws_access_key_id=s3_key, aws_secret_access_key=s3_secret)
+    try:
+        s3.upload_file(local_path, bucket_name, object_key)
+        logging.info(f"Uploaded {local_path} to bucket {bucket_name} as {object_key}")
+    except Exception as e:
+        logging.error(f"Failed to upload {local_path} to bucket {bucket_name}: {e}")
+
 # test
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
