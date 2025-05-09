@@ -4,6 +4,9 @@ import logging
 from flask import Flask, request, jsonify, send_file, abort
 from flask_cors import CORS
 import templatematch
+from download_image_from_s3 import download_entire_prefix_from_s3 as download_images
+
+s3_bucket_name = "eg-template-matching"
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -24,6 +27,11 @@ def match_template():
     if not input_dir or not base_file:
         return jsonify({"error": "Both 'dir' and 'base_filename' are required"}), 400
 
+    # Download the base file from S3
+    download_images(bucket_name=s3_bucket_name, prefix=input_dir, local_base=input_dir, 
+                            s3_key=os.getenv('AWS_ACCESS_KEY_ID'), 
+                            s3_secret=os.getenv('AWS_SECRET_ACCESS_KEY'))
+    
     full_dir = os.path.abspath(input_dir)
     if not os.path.isdir(full_dir):
         return jsonify({"error": f"Directory not found: {full_dir}"}), 404

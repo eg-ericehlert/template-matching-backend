@@ -23,17 +23,6 @@ BRIGHT_COLORS = [
     [0, 0, 255]       # Bright Blue
 ]
 
-def download_image_from_s3(bucket_name, object_key, local_path):
-    """
-    Download an image from S3 bucket to a local path.
-    """
-    
-    s3 = boto3.client('s3')
-    try:
-        s3.download_file(bucket_name, object_key, local_path)
-        logging.info(f"Downloaded {object_key} from bucket {bucket_name} to {local_path}")
-    except Exception as e:
-        logging.error(f"Failed to download {object_key} from bucket {bucket_name}: {e}")
 
 def apply_threshold(image, threshold_value=127):
     _, binary_image = cv.threshold(image, threshold_value, 255, cv.THRESH_BINARY)
@@ -124,12 +113,13 @@ def read_thresholds(csv_path):
 
 def run_job(input_dir, base_filename, nms_thresh=0.5):
     """
-    Process the input image and templates, save annotated results, and return a summary dict.
+    Process the input image and annotations, save annotated results, and return a summary dict.
     """
+    
     # Paths
     main_path      = os.path.join(input_dir, base_filename)
     threshold_csv  = os.path.join(input_dir, 'thresholds.csv')
-    template_folder= os.path.join(input_dir, 'templates')
+    template_folder= os.path.join(input_dir, 'annotations')
 
     # Load main image
     img_rgb = cv.imread(main_path)
@@ -143,18 +133,18 @@ def run_job(input_dir, base_filename, nms_thresh=0.5):
 
     # Read thresholds
     thresholds = read_thresholds(threshold_csv)
-    logging.info(f"Loaded thresholds for {len(thresholds)} templates.")
+    logging.info(f"Loaded thresholds for {len(thresholds)} annotations.")
 
     all_boxes, all_scores, all_names = [], [], []
     template_colors = {}
     color_idx = 0
 
-    # Iterate templates
+    # Iterate annotations
     for tpl_file in os.listdir(template_folder):
         tpl_path = os.path.join(template_folder, tpl_file)
         tpl = cv.imread(tpl_path, cv.IMREAD_GRAYSCALE)
         if tpl is None:
-            logging.warning(f"Skipping unreadable template: {tpl_path}")
+            logging.warning(f"Skipping unreadable annotation: {tpl_path}")
             continue
 
         # Assign color
