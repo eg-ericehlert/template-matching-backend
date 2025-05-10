@@ -3,7 +3,6 @@ import os
 import logging
 from flask import Flask, request, jsonify, send_file, abort
 from flask_cors import CORS
-import templatematch
 from s3_utils import download_entire_prefix_from_s3 as download_images
 from s3_utils import upload_image_to_s3 as upload_image
 import shutil
