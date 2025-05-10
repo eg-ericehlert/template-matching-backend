@@ -15,9 +15,9 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 app = Flask(__name__)
 CORS(app)
 
-@app.route('/hello')
-def hello():
-    return "hello guvvvnaaaa"
+@app.route('/test')
+def test():
+    return jsonify({"message": "testing, 123. hello from the backend!"}), 200
 
 @app.route('/health')
 def health():
