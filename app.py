@@ -108,7 +108,7 @@ def save_annotation():
     pixel_coords     = body["pixel_coords"]
     mask             = body["mask"]
     preview_dataurl  = body["preview"]       # DataURL or null
-    annotation_type  = body["annotation_type"]
+    annotation_type  = body["type"]
     x, y, w, h       = body["x"], body["y"], body["width"], body["height"]
 
     # 3) Optionally upload preview PNG to S3 and build s3_key
