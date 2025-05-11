@@ -95,7 +95,7 @@ def save_annotation():
     body = request.get_json(silent=True)
     required = [
         "sld_id", "name", "pixel_coords", "mask",
-        "preview", "x", "y", "width", "height", "annotation_type"
+        "preview", "x", "y", "width", "height", "type"
     ]
     missing = [k for k in required if k not in body]
     if missing:
