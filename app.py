@@ -90,7 +90,7 @@ def get_sld_and_annotations():
 @app.route('/save-annotation', methods=['POST'])
 def save_annotation():
     body = request.get_json(silent=True)
-    required = ["sld_id", "name", "pixel_coords", "mask", "preview", "x", "y", "width", "height"]
+    required = ["sld_id", "name", "pixel_coords", "mask", "preview", "x", "y", "width", "height", "type"]
     if not body or any(key not in body for key in required):
         return jsonify(error=f"Missing one of required fields: {', '.join(required)}"), 400
 
@@ -107,6 +107,7 @@ def save_annotation():
     y            = body["y"]
     width        = body["width"]
     height       = body["height"]
+    type         = body["type"]
 
     # 3) connect
     try:
@@ -130,9 +131,10 @@ def save_annotation():
                    y,
                    width,
                    height,
+                   type, 
                    is_deleted)
                 VALUES
-                  (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, FALSE)
+                  (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, FALSE)
                 RETURNING sld_annotation_id
             """, (
                 new_id,
@@ -144,7 +146,8 @@ def save_annotation():
                 x,
                 y,
                 width,
-                height
+                height,
+                type
             ))
             saved_id = cur.fetchone()[0]
             logging.info(f"Inserted annotation {saved_id} for SLD {sld_id}")
