@@ -4,8 +4,10 @@ import logging
 from flask import Flask, request, jsonify, send_file, abort
 from flask_cors import CORS
 from app.s3_utils import download_entire_prefix_from_s3 as download_images
-from app.s3_utils import upload_image_to_s3 as upload_image
+from app.s3_utils import upload_image_to_s3
 import shutil
+import base64
+import tempfile
 import psycopg2
 from psycopg2.extras import register_default_jsonb
 import uuid
@@ -89,34 +91,56 @@ def get_sld_and_annotations():
 
 @app.route('/save-annotation', methods=['POST'])
 def save_annotation():
+    # 1) Validate payload
     body = request.get_json(silent=True)
-    required = ["sld_id", "name", "pixel_coords", "mask", "preview", "x", "y", "width", "height", "type"]
-    if not body or any(key not in body for key in required):
-        return jsonify(error=f"Missing one of required fields: {', '.join(required)}"), 400
+    required = [
+        "sld_id", "name", "pixel_coords", "mask",
+        "preview", "x", "y", "width", "height", "annotation_type"
+    ]
+    missing = [k for k in required if k not in body]
+    if missing:
+        return jsonify(error=f"Missing required fields: {', '.join(missing)}"), 400
 
-    # 1) generate a new UUID
-    new_id = str(uuid.uuid4())
+    # 2) Extract
+    new_id           = str(uuid.uuid4())
+    sld_id           = body["sld_id"]
+    name             = body["name"]
+    pixel_coords     = body["pixel_coords"]
+    mask             = body["mask"]
+    preview_dataurl  = body["preview"]       # DataURL or null
+    annotation_type  = body["annotation_type"]
+    x, y, w, h       = body["x"], body["y"], body["width"], body["height"]
 
-    # 2) extract fields
-    sld_id       = body["sld_id"]
-    name         = body["name"]
-    pixel_coords = body["pixel_coords"]
-    mask         = body["mask"]
-    preview      = body["preview"]
-    x            = body["x"]
-    y            = body["y"]
-    width        = body["width"]
-    height       = body["height"]
-    type         = body["type"]
+    # 3) Optionally upload preview PNG to S3 and build s3_key
+    s3_key = None
+    if preview_dataurl:
+        try:
+            header, b64 = preview_dataurl.split(",", 1)
+            data = base64.b64decode(b64)
+            tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+            tmp.write(data); tmp.flush(); tmp.close()
 
-    # 3) connect
+            object_key = f"annotations/{uuid.uuid4()}.png"
+            upload_image_to_s3(
+                bucket_name=os.getenv("S3_BUCKET"),
+                local_path=tmp.name,
+                object_key=object_key,
+                s3_key=os.getenv("AWS_ACCESS_KEY_ID"),
+                s3_secret=os.getenv("AWS_SECRET_ACCESS_KEY")
+            )
+            os.unlink(tmp.name)
+            s3_key = f"https://{os.getenv('S3_BUCKET')}.s3.amazonaws.com/{object_key}"
+        except Exception:
+            logging.exception("Failed to upload preview to S3")
+            # continue without s3_key
+
+    # 4) Insert into DB
     try:
         conn = get_db_connection()
     except Exception:
-        logging.exception("Database connection failed")
+        logging.exception("DB connection failed")
         return jsonify(error="Database connection failed"), 500
 
-    # 4) insert
     try:
         with conn, conn.cursor() as cur:
             cur.execute("""
@@ -126,15 +150,12 @@ def save_annotation():
                    name,
                    pixel_coords,
                    mask,
-                   preview,
-                   x,
-                   y,
-                   width,
-                   height,
-                   type, 
+                   preview,    -- raw DataURL, if you still want it
+                   s3_key,     -- new column
+                   x, y, width, height,
+                   annotation_type,
                    is_deleted)
-                VALUES
-                  (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, FALSE)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, FALSE)
                 RETURNING sld_annotation_id
             """, (
                 new_id,
@@ -142,19 +163,18 @@ def save_annotation():
                 name,
                 psycopg2.extras.Json(pixel_coords),
                 psycopg2.extras.Json(mask),
-                preview,
-                x,
-                y,
-                width,
-                height,
-                type
+                preview_dataurl,
+                s3_key,
+                x, y, w, h,
+                annotation_type
             ))
             saved_id = cur.fetchone()[0]
-            logging.info(f"Inserted annotation {saved_id} for SLD {sld_id}")
+            logging.info(f"Saved annotation {saved_id} for SLD {sld_id}")
 
         return jsonify(
             message="Annotation saved",
-            sld_annotation_id=saved_id
+            sld_annotation_id=saved_id,
+            s3_key=s3_key
         ), 201
 
     except Exception:
