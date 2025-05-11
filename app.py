@@ -35,14 +35,13 @@ def test():
 def health():
     return '', 200
 
-@app.route('/get-sld-and-annotations', methods=['GET'])
+@app.route('/get-sld-and-annotations', methods=['POST'])
 def get_sld_and_annotations():
-    # 1) Read sld_id from query params
-    sld_id = request.args.get('sld_id')
-    if not sld_id:
-        return jsonify(error="Missing sld_id"), 400
+    body = request.get_json(silent=True)
+    if not body or 'sld_id' not in body:
+        return jsonify(error="Missing sld_id in request body"), 400
+    sld_id = body['sld_id']
 
-    # 2) Connect to the database
     try:
         conn = get_db_connection()
     except Exception:
@@ -51,55 +50,37 @@ def get_sld_and_annotations():
 
     try:
         with conn, conn.cursor() as cur:
-            # 3) Fetch the base S3 key
-            cur.execute(
-                "SELECT s3_key FROM slds WHERE sld_id = %s",
-                (sld_id,)
-            )
+            # Fetch base image key
+            cur.execute("SELECT s3_key FROM slds WHERE sld_id = %s", (sld_id,))
             row = cur.fetchone()
             if not row:
                 return jsonify(error="SLD not found"), 404
             s3_key = row[0]
-            logging.info(f"Fetched S3 key for SLD {sld_id}: {s3_key}")
 
-            # 4) Fetch all non-deleted annotations
+            # Fetch annotations
             cur.execute("""
-                SELECT
-                  sld_annotation_id,
-                  name,
-                  pixel_coords,
-                  mask,
-                  preview,
-                  x, y, width, height
+                SELECT sld_annotation_id, name, pixel_coords, mask, preview, x, y, width, height
                 FROM sld_annotations
-                WHERE sld_id = %s
-                  AND is_deleted = FALSE
+                WHERE sld_id = %s AND is_deleted = FALSE
             """, (sld_id,))
             rows = cur.fetchall()
 
-            # 5) Build annotations list
-            annotations = []
-            for (
-                ann_id, name, pixel_coords, mask,
-                preview, x, y, width, height
-            ) in rows:
-                annotations.append({
-                    "sld_annotation_id": ann_id,
-                    "name":              name,
-                    "pixel_coords":      pixel_coords,
-                    "mask":              mask,
-                    "preview":           preview,
-                    "x":                 x,
-                    "y":                 y,
-                    "width":             width,
-                    "height":            height
-                })
+        annotations = [
+            {
+                "sld_annotation_id":   r[0],
+                "name":                r[1],
+                "pixel_coords":        r[2],
+                "mask":                r[3],
+                "preview":             r[4],
+                "x":                   r[5],
+                "y":                   r[6],
+                "width":               r[7],
+                "height":              r[8]
+            }
+            for r in rows
+        ]
 
-        # 6) Return both the base key and the annotations array
-        return jsonify(
-            s3_key=s3_key,
-            annotations=annotations
-        ), 200
+        return jsonify(s3_key=s3_key, annotations=annotations), 200
 
     except Exception:
         logging.exception("Error fetching SLD or annotations")
