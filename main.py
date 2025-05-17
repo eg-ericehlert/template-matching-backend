@@ -201,7 +201,9 @@ def save_annotation():
         return jsonify(
             message="Annotation saved",
             sld_annotation_id=saved_id,
-            s3_key=s3_key
+            s3_key=s3_key,
+            context_snapshot_dataurl=context_snapshot_dataurl,
+            s3_key_context=s3_key_context
         ), 201
 
     except Exception:
