@@ -1,4 +1,4 @@
-# app.py
+# main.py
 import os
 import logging
 from flask import Flask, request, jsonify, send_file, abort
@@ -95,32 +95,34 @@ def save_annotation():
     body = request.get_json(silent=True)
     required = [
         "sld_id", "name", "pixel_coords", "mask",
-        "preview", "x", "y", "width", "height", "type"
+        "preview", "context_snapshot", "x", "y", "width", "height", "type"
     ]
     missing = [k for k in required if k not in body]
     if missing:
         return jsonify(error=f"Missing required fields: {', '.join(missing)}"), 400
 
     # 2) Extract
-    new_id           = str(uuid.uuid4())
-    sld_id           = body["sld_id"]
-    name             = body["name"]
-    pixel_coords     = body["pixel_coords"]
-    mask             = body["mask"]
-    preview_dataurl  = body["preview"]       # DataURL or null
-    annotation_type  = body["type"]
-    x, y, w, h       = body["x"], body["y"], body["width"], body["height"]
+    new_id                   = str(uuid.uuid4())
+    sld_id                   = body["sld_id"]
+    name                     = body["name"]
+    context_snapshot_dataurl = body["context_snapshot"]  # DataURL or null
+    pixel_coords             = body["pixel_coords"]
+    mask                     = body["mask"]
+    preview_dataurl          = body["preview"]       # DataURL or null
+    annotation_type          = body["type"]
+    x, y, w, h               = body["x"], body["y"], body["width"], body["height"]
 
     # 3) Optionally upload preview PNG to S3 and build s3_key
     s3_key = None
     if preview_dataurl:
         try:
+            annotation_id = str(uuid.uuid4())
             header, b64 = preview_dataurl.split(",", 1)
             data = base64.b64decode(b64)
             tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
             tmp.write(data); tmp.flush(); tmp.close()
 
-            object_key = f"annotations/{uuid.uuid4()}.png"
+            object_key = f"annotations/{annotation_id}.png"
             upload_image_to_s3(
                 bucket_name=os.getenv("S3_BUCKET"),
                 local_path=tmp.name,
@@ -130,6 +132,26 @@ def save_annotation():
             )
             os.unlink(tmp.name)
             s3_key = f"https://{os.getenv('S3_BUCKET')}.s3.amazonaws.com/{object_key}"
+            if context_snapshot_dataurl:
+                try:
+                    header, b64 = context_snapshot_dataurl.split(",", 1)
+                    data = base64.b64decode(b64)
+                    tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+                    tmp.write(data); tmp.flush(); tmp.close()
+
+                    object_key = f"annotations/{annotation_id}_context.png"
+                    upload_image_to_s3(
+                        bucket_name=os.getenv("S3_BUCKET"),
+                        local_path=tmp.name,
+                        object_key=object_key,
+                        s3_key=os.getenv("AWS_ACCESS_KEY_ID"),
+                        s3_secret=os.getenv("AWS_SECRET_ACCESS_KEY")
+                    )
+                    os.unlink(tmp.name)
+                    s3_key_context = f"https://{os.getenv('S3_BUCKET')}.s3.amazonaws.com/{object_key}"
+                except Exception:
+                    logging.exception("Failed to upload context snapshot to S3")
+                    # continue without s3_key
         except Exception:
             logging.exception("Failed to upload preview to S3")
             # continue without s3_key
@@ -151,11 +173,13 @@ def save_annotation():
                    pixel_coords,
                    mask,
                    preview,    -- raw DataURL, if you still want it
+                   context_snapshot,
                    s3_key,     -- new column
+                   s3_key_context,
                    x, y, width, height,
                    annotation_type,
                    is_deleted)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, FALSE)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, FALSE)
                 RETURNING sld_annotation_id
             """, (
                 new_id,
@@ -164,7 +188,9 @@ def save_annotation():
                 psycopg2.extras.Json(pixel_coords),
                 psycopg2.extras.Json(mask),
                 preview_dataurl,
+                context_snapshot_dataurl,
                 s3_key,
+                s3_key_context,         
                 x, y, w, h,
                 annotation_type
             ))
