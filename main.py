@@ -105,6 +105,7 @@ def save_annotation():
     new_id                   = str(uuid.uuid4())
     sld_id                   = body["sld_id"]
     name                     = body["name"]
+    asset_class              = body["asset_class"]
     context_snapshot_dataurl = body["context_snapshot"]  # DataURL or null
     pixel_coords             = body["pixel_coords"]
     mask                     = body["mask"]
@@ -171,6 +172,7 @@ def save_annotation():
                   (sld_annotation_id,
                    sld_id,
                    name,
+                   asset_class,
                    pixel_coords,
                    mask,
                    preview,    -- raw DataURL, if you still want it
@@ -180,12 +182,13 @@ def save_annotation():
                    x, y, width, height,
                    annotation_type,
                    is_deleted)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, FALSE)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, FALSE)
                 RETURNING sld_annotation_id
             """, (
                 new_id,
                 sld_id,
                 name,
+                asset_class,
                 psycopg2.extras.Json(pixel_coords),
                 psycopg2.extras.Json(mask),
                 preview_dataurl,
@@ -201,8 +204,9 @@ def save_annotation():
         return jsonify(
             message="Annotation saved",
             sld_annotation_id=saved_id,
+            name=name,
+            asset_class=asset_class,
             s3_key=s3_key,
-            context_snapshot_dataurl=context_snapshot_dataurl,
             s3_key_context=s3_key_context
         ), 201
 
