@@ -114,6 +114,7 @@ def save_annotation():
 
     # 3) Optionally upload preview PNG to S3 and build s3_key
     s3_key = None
+    s3_key_context = None
     if preview_dataurl:
         try:
             annotation_id = str(uuid.uuid4())
