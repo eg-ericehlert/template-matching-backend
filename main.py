@@ -12,7 +12,6 @@ import psycopg2
 from psycopg2.extras import register_default_jsonb
 import uuid
 
-s3_bucket_name = "eg-template-matching"
 register_default_jsonb()
 
 # Configure logging
@@ -105,7 +104,7 @@ def save_annotation():
     new_id                   = str(uuid.uuid4())
     sld_id                   = body["sld_id"]
     name                     = body["name"]
-    asset_class              = body["asset_class"]
+    asset_class              = body.get("asset_class")
     context_snapshot_dataurl = body["context_snapshot"]  # DataURL or null
     pixel_coords             = body["pixel_coords"]
     mask                     = body["mask"]
