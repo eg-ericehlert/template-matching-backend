@@ -110,6 +110,7 @@ def save_annotation():
     mask                     = body["mask"]
     preview_dataurl          = body["preview"]       # DataURL or null
     annotation_type          = body["type"]
+    class_type               = body.get("class_type", "default")
     x, y, w, h               = body["x"], body["y"], body["width"], body["height"]
 
     # 3) Optionally upload preview PNG to S3 and build s3_key
@@ -180,8 +181,9 @@ def save_annotation():
                    s3_key_context,
                    x, y, width, height,
                    annotation_type,
-                   is_deleted)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, FALSE)
+                   is_deleted,
+                   class_type)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, FALSE, %s)
                 RETURNING sld_annotation_id
             """, (
                 new_id,
@@ -195,7 +197,8 @@ def save_annotation():
                 s3_key,
                 s3_key_context,         
                 x, y, w, h,
-                annotation_type
+                annotation_type,
+                class_type
             ))
             saved_id = cur.fetchone()[0]
             logging.info(f"Saved annotation {saved_id} for SLD {sld_id}")
