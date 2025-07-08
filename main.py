@@ -61,11 +61,19 @@ def get_sld_and_annotations():
 
             # Fetch annotations
             cur.execute("""
-                SELECT sld_annotation_id, name, pixel_coords, mask, preview, x, y, width, height
+                SELECT sld_annotation_id, name, pixel_coords, mask, preview, x, y, width, height, class_type
                 FROM sld_annotations
                 WHERE sld_id = %s AND is_deleted = FALSE
             """, (sld_id,))
             rows = cur.fetchall()
+
+            # Fetch connections
+            cur.execute("""
+                SELECT sld_connection_id, source_annotation_id, target_annotation_id
+                FROM sld_connections
+                WHERE sld_id = %s
+            """, (sld_id,))
+            connection_rows = cur.fetchall()
 
         annotations = [
             {
@@ -77,17 +85,26 @@ def get_sld_and_annotations():
                 "x":                   r[5],
                 "y":                   r[6],
                 "width":               r[7],
-                "height":              r[8]
+                "height":              r[8],
+                "class_type":          r[9]
             }
             for r in rows
         ]
 
-        return jsonify(s3_key=s3_key, annotations=annotations), 200
+        connections = [
+            {
+                "sld_connection_id":     c[0],
+                "source_annotation_id":  c[1],
+                "target_annotation_id":  c[2]
+            }
+            for c in connection_rows
+        ]
+
+        return jsonify(s3_key=s3_key, annotations=annotations, connections=connections), 200
 
     except Exception:
-        logging.exception("Error fetching SLD or annotations")
+        logging.exception("Error fetching SLD, annotations, or connections")
         return jsonify(error="Internal server error"), 500
-
 @app.route('/save-annotation', methods=['POST'])
 def save_annotation():
     # 1) Validate payload
