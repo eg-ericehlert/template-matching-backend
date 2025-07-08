@@ -216,6 +216,94 @@ def save_annotation():
         logging.exception("Error saving annotation")
         return jsonify(error="Internal server error"), 500
 
+@app.route('/save-connections', methods=['POST'])
+def save_connections():
+    # 1) Validate payload
+    body = request.get_json(silent=True)
+    if not body:
+        return jsonify(error="Invalid JSON payload"), 400
+    
+    required = ["sld_id", "connections"]
+    missing = [k for k in required if k not in body]
+    if missing:
+        return jsonify(error=f"Missing required fields: {', '.join(missing)}"), 400
+    
+    # Validate connections array
+    connections = body["connections"]
+    if not isinstance(connections, list):
+        return jsonify(error="Connections must be an array"), 400
+    
+    if not connections:
+        return jsonify(message="No connections to save"), 200
+    
+    # Check each connection has required fields
+    connection_fields = ["connection_id", "source_annotation_id", "target_annotation_id"]
+    for i, conn in enumerate(connections):
+        if not isinstance(conn, dict):
+            return jsonify(error=f"Connection at index {i} is not an object"), 400
+        
+        missing_fields = [f for f in connection_fields if f not in conn]
+        if missing_fields:
+            return jsonify(error=f"Connection at index {i} is missing fields: {', '.join(missing_fields)}"), 400
+    
+    # 2) Extract
+    sld_id = body["sld_id"]
+    
+    # 3) Insert into DB
+    try:
+        conn = get_db_connection()
+    except Exception:
+        logging.exception("DB connection failed")
+        return jsonify(error="Database connection failed"), 500
+    
+    try:
+        with conn, conn.cursor() as cur:
+            # First, delete existing connections for this SLD
+            cur.execute("""
+                DELETE FROM sld_connections
+                WHERE sld_id = %s
+            """, (sld_id,))
+            
+            # Then insert all new connections
+            saved_ids = []
+            for connection in connections:
+                connection_id = connection.get("connection_id") or str(uuid.uuid4())
+                source_id = connection["source_annotation_id"]
+                target_id = connection["target_annotation_id"]
+                
+                cur.execute("""
+                    INSERT INTO sld_connections
+                      (sld_connection_id,
+                       sld_id,
+                       source_annotation_id,
+                       target_annotation_id)
+                    VALUES (%s, %s, %s, %s)
+                    ON CONFLICT (sld_connection_id) DO UPDATE
+                    SET source_annotation_id = EXCLUDED.source_annotation_id,
+                        target_annotation_id = EXCLUDED.target_annotation_id
+                    RETURNING sld_connection_id
+                """, (
+                    connection_id,
+                    sld_id,
+                    source_id,
+                    target_id
+                ))
+                saved_id = cur.fetchone()[0]
+                saved_ids.append(saved_id)
+            
+            logging.info(f"Saved {len(saved_ids)} connections for SLD {sld_id}")
+            
+        return jsonify(
+            message=f"Successfully saved {len(saved_ids)} connections",
+            connection_ids=saved_ids,
+            sld_id=sld_id,
+            success=True
+        ), 201
+        
+    except Exception as e:
+        logging.exception("Error saving connections")
+        return jsonify(error=f"Internal server error: {str(e)}"), 500
+    
 if __name__ == '__main__':
     # Use env vars or defaults
     host = os.getenv('FLASK_RUN_HOST', '0.0.0.0')
