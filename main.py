@@ -287,14 +287,19 @@ def save_connections():
                 connection_id = connection.get("connection_id") or str(uuid.uuid4())
                 source_id = connection["source_annotation_id"]
                 target_id = connection["target_annotation_id"]
+                source_enclosure_id = connection.get("source_enclosure_id")
+                target_enclosure_id = connection.get("target_enclosure_id")
                 
                 cur.execute("""
                     INSERT INTO sld_connections
                       (sld_connection_id,
                        sld_id,
                        source_annotation_id,
-                       target_annotation_id)
-                    VALUES (%s, %s, %s, %s)
+                       target_annotation_id,
+                       source_enclosure_id,
+                       target_enclosure_id
+                            )
+                    VALUES (%s, %s, %s, %s, %s, %s)
                     ON CONFLICT (sld_connection_id) DO UPDATE
                     SET source_annotation_id = EXCLUDED.source_annotation_id,
                         target_annotation_id = EXCLUDED.target_annotation_id
@@ -303,7 +308,9 @@ def save_connections():
                     connection_id,
                     sld_id,
                     source_id,
-                    target_id
+                    target_id,
+                    source_enclosure_id,
+                    target_enclosure_id
                 ))
                 saved_id = cur.fetchone()[0]
                 saved_ids.append(saved_id)
